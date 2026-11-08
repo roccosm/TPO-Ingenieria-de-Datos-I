@@ -1,0 +1,212 @@
+CREATE DATABASE TPOAndreaniGrupo03
+GO
+
+USE TPOAndreaniGrupo03;
+
+CREATE TABLE MEDICAMENTO (
+    IdMedicamento INT IDENTITY(1,1) NOT NULL,
+    Nombre VARCHAR(150) NOT NULL,
+    [Descripción] VARCHAR(500) NULL,
+    Fabricante VARCHAR(150) NULL,
+    Temperatura_min DECIMAL(5,2) NOT NULL,
+    Temperatura_max DECIMAL(5,2) NOT NULL,
+    CONSTRAINT PK_MEDICAMENTO PRIMARY KEY (IdMedicamento),
+    CONSTRAINT CK_MEDICAMENTO_Temperatura CHECK (Temperatura_min <= Temperatura_max)
+);
+
+CREATE TABLE LOTE (
+    IdLote INT IDENTITY(1,1) NOT NULL,
+    NumeroLote VARCHAR(100) NOT NULL,
+    FechaFabricacion DATE NOT NULL,
+    FechaVencimiento DATE NOT NULL,
+    Estado VARCHAR(30) NOT NULL,
+    IdMedicamento INT NOT NULL,
+    CONSTRAINT PK_LOTE PRIMARY KEY (IdLote),
+    CONSTRAINT FK_LOTE_MEDICAMENTO FOREIGN KEY (IdMedicamento)
+        REFERENCES MEDICAMENTO(IdMedicamento),
+    CONSTRAINT CK_LOTE_Fechas CHECK (FechaVencimiento > FechaFabricacion),
+    CONSTRAINT UQ_LOTE_LoteMedicamento UNIQUE (IdLote, IdMedicamento),
+    CONSTRAINT UQ_LOTE_NumeroLoteMedicamento UNIQUE (NumeroLote, IdMedicamento)
+);
+
+CREATE TABLE DEPOSITO (
+    IdDeposito INT IDENTITY(1,1) NOT NULL,
+    Nombre VARCHAR(150) NOT NULL,
+    [Ubicación] VARCHAR(250) NOT NULL,
+    CONSTRAINT PK_DEPOSITO PRIMARY KEY (IdDeposito)
+);
+
+CREATE TABLE CLIENTE (
+    IdCliente INT IDENTITY(1,1) NOT NULL,
+    Nombre VARCHAR(150) NOT NULL,
+    CONSTRAINT PK_CLIENTE PRIMARY KEY (IdCliente)
+);
+
+CREATE TABLE PEDIDO (
+    IdPedido INT IDENTITY(1,1) NOT NULL,
+    FechaPedido DATE NOT NULL,
+    Estado VARCHAR(30) NOT NULL,
+    FechaEntregaSolicitada DATE NOT NULL,
+    DireccionDestino VARCHAR(250) NOT NULL,
+    IdCliente INT NOT NULL,
+    CONSTRAINT PK_PEDIDO PRIMARY KEY (IdPedido),
+    CONSTRAINT FK_PEDIDO_CLIENTE FOREIGN KEY (IdCliente)
+        REFERENCES CLIENTE(IdCliente),
+    CONSTRAINT CK_PEDIDO_FechaEntrega CHECK (FechaEntregaSolicitada >= FechaPedido)
+);
+
+CREATE TABLE ENVIO (
+    IdEnvio INT IDENTITY(1,1) NOT NULL,
+    [FechaCreación] DATE NOT NULL,
+    Estado VARCHAR(30) NOT NULL,
+    Temperatura_min DECIMAL(5,2) NOT NULL,
+    Temperatura_max DECIMAL(5,2) NOT NULL,
+    CONSTRAINT PK_ENVIO PRIMARY KEY (IdEnvio),
+    CONSTRAINT CK_ENVIO_Temperatura CHECK (Temperatura_min <= Temperatura_max)
+);
+
+CREATE TABLE EXISTENCIA (
+    IdLote INT NOT NULL,
+    IdDeposito INT NOT NULL,
+    CantidadDisponible INT NOT NULL,
+    CONSTRAINT PK_EXISTENCIA PRIMARY KEY (IdLote, IdDeposito),
+    CONSTRAINT FK_EXISTENCIA_LOTE FOREIGN KEY (IdLote)
+        REFERENCES LOTE(IdLote),
+    CONSTRAINT FK_EXISTENCIA_DEPOSITO FOREIGN KEY (IdDeposito)
+        REFERENCES DEPOSITO(IdDeposito),
+    CONSTRAINT CK_EXISTENCIA_NoNegativa CHECK (CantidadDisponible >= 0)
+);
+
+CREATE TABLE INGRESO (
+    IdIngreso INT IDENTITY(1,1) NOT NULL,
+    FechaIngreso DATE NOT NULL,
+    Cantidad INT NOT NULL,
+    IdLote INT NOT NULL,
+    IdDeposito INT NOT NULL,
+    CONSTRAINT PK_INGRESO PRIMARY KEY (IdIngreso),
+    CONSTRAINT FK_INGRESO_LOTE FOREIGN KEY (IdLote)
+        REFERENCES LOTE(IdLote),
+    CONSTRAINT FK_INGRESO_DEPOSITO FOREIGN KEY (IdDeposito)
+        REFERENCES DEPOSITO(IdDeposito),
+    CONSTRAINT CK_INGRESO_Cantidad CHECK (Cantidad > 0)
+);
+CREATE TABLE MOVIMIENTO (
+    IdMovimiento INT IDENTITY(1,1) NOT NULL,
+    FechaMovimiento DATE NOT NULL,
+    Cantidad INT NOT NULL,
+    IdLote INT NOT NULL,
+    IdDeposito_origen INT NOT NULL,
+    IdDeposito_destino INT NOT NULL,
+    CONSTRAINT PK_MOVIMIENTO PRIMARY KEY (IdMovimiento),
+    CONSTRAINT FK_MOVIMIENTO_LOTE FOREIGN KEY (IdLote)
+        REFERENCES LOTE(IdLote),
+    CONSTRAINT FK_MOVIMIENTO_DEPOSITO_ORIGEN FOREIGN KEY (IdDeposito_origen)
+        REFERENCES DEPOSITO(IdDeposito),
+    CONSTRAINT FK_MOVIMIENTO_DEPOSITO_DESTINO FOREIGN KEY (IdDeposito_destino)
+        REFERENCES DEPOSITO(IdDeposito),
+    CONSTRAINT CK_MOVIMIENTO_Cantidad CHECK (Cantidad > 0),
+    CONSTRAINT CK_MOVIMIENTO_Depositos CHECK (IdDeposito_origen <> IdDeposito_destino)
+);
+
+CREATE TABLE DETALLE_PEDIDO (
+    IdPedido INT NOT NULL,
+    IdMedicamento INT NOT NULL,
+    CantidadSolicitada INT NOT NULL,
+    CONSTRAINT PK_DETALLE_PEDIDO PRIMARY KEY (IdPedido, IdMedicamento),
+    CONSTRAINT FK_DETALLE_PEDIDO_PEDIDO FOREIGN KEY (IdPedido)
+        REFERENCES PEDIDO(IdPedido),
+    CONSTRAINT FK_DETALLE_PEDIDO_MEDICAMENTO FOREIGN KEY (IdMedicamento)
+        REFERENCES MEDICAMENTO(IdMedicamento),
+    CONSTRAINT CK_DETALLE_PEDIDO_Cantidad CHECK (CantidadSolicitada > 0)
+);
+
+CREATE TABLE ASIGNACION_LOTE (
+    IdPedido INT NOT NULL,
+    IdMedicamento INT NOT NULL,
+    IdLote INT NOT NULL,
+    IdDeposito INT NOT NULL,
+    CantidadAsignada INT NOT NULL,
+    CantidadPreparada INT NOT NULL DEFAULT (0),
+    FechaPreparacion DATE NULL,
+    EstadoPreparacion VARCHAR(30) NOT NULL,
+    CONSTRAINT PK_ASIGNACION_LOTE PRIMARY KEY
+        (IdPedido, IdMedicamento, IdLote, IdDeposito),
+    CONSTRAINT FK_ASIGNACION_DETALLE_PEDIDO FOREIGN KEY (IdPedido, IdMedicamento)
+        REFERENCES DETALLE_PEDIDO(IdPedido, IdMedicamento),
+    CONSTRAINT FK_ASIGNACION_EXISTENCIA FOREIGN KEY (IdLote, IdDeposito)
+        REFERENCES EXISTENCIA(IdLote, IdDeposito),
+    CONSTRAINT FK_ASIGNACION_LOTE_MEDICAMENTO FOREIGN KEY (IdLote, IdMedicamento)
+        REFERENCES LOTE(IdLote, IdMedicamento),
+    CONSTRAINT CK_ASIGNACION_CantidadAsignada CHECK (CantidadAsignada > 0),
+    CONSTRAINT CK_ASIGNACION_CantidadPreparada CHECK
+        (CantidadPreparada >= 0 AND CantidadPreparada <= CantidadAsignada)
+);
+
+CREATE TABLE VALIDACION (
+    IdValidacion INT IDENTITY(1,1) NOT NULL,
+    FechaValidacion DATE NOT NULL,
+    Resultado VARCHAR(30) NOT NULL,
+    ErrorDetectado VARCHAR(500) NULL,
+    IdPedido INT NOT NULL,
+    IdMedicamento INT NOT NULL,
+    IdLote INT NOT NULL,
+    IdDeposito INT NOT NULL,
+    CONSTRAINT PK_VALIDACION PRIMARY KEY (IdValidacion),
+    CONSTRAINT FK_VALIDACION_ASIGNACION FOREIGN KEY
+        (IdPedido, IdMedicamento, IdLote, IdDeposito)
+        REFERENCES ASIGNACION_LOTE(IdPedido, IdMedicamento, IdLote, IdDeposito)
+);
+
+CREATE TABLE CAJA (
+    IdCaja INT IDENTITY(1,1) NOT NULL,
+    CodigoQR VARCHAR(100) NOT NULL,
+    FechaArmado DATE NOT NULL,
+    Estado VARCHAR(30) NOT NULL,
+    IdPedido INT NOT NULL,
+    CONSTRAINT PK_CAJA PRIMARY KEY (IdCaja),
+    CONSTRAINT UQ_CAJA_CodigoQR UNIQUE (CodigoQR),
+    CONSTRAINT FK_CAJA_PEDIDO FOREIGN KEY (IdPedido)
+        REFERENCES PEDIDO(IdPedido)
+);
+CREATE TABLE DETALLE_CAJA (
+    IdCaja INT NOT NULL,
+    IdMedicamento INT NOT NULL,
+    IdLote INT NOT NULL,
+    IdDeposito INT NOT NULL,
+    CantidadEmpacada INT NOT NULL,
+    CONSTRAINT PK_DETALLE_CAJA PRIMARY KEY
+        (IdCaja, IdMedicamento, IdLote, IdDeposito),
+    CONSTRAINT FK_DETALLE_CAJA_CAJA FOREIGN KEY (IdCaja)
+        REFERENCES CAJA(IdCaja),
+    CONSTRAINT FK_DETALLE_CAJA_LOTE_MEDICAMENTO FOREIGN KEY (IdLote, IdMedicamento)
+        REFERENCES LOTE(IdLote, IdMedicamento),
+    CONSTRAINT FK_DETALLE_CAJA_EXISTENCIA FOREIGN KEY (IdLote, IdDeposito)
+        REFERENCES EXISTENCIA(IdLote, IdDeposito),
+    CONSTRAINT CK_DETALLE_CAJA_Cantidad CHECK (CantidadEmpacada > 0)
+);
+
+CREATE TABLE PEDIDO_ENVIO (
+    IdEnvio INT NOT NULL,
+    IdPedido INT NOT NULL,
+    FechaPrevista DATE NOT NULL,
+    FechaIntento DATE NULL,
+    Estado VARCHAR(30) NOT NULL,
+    Resultado VARCHAR(30) NULL,
+    CONSTRAINT PK_PEDIDO_ENVIO PRIMARY KEY (IdEnvio, IdPedido),
+    CONSTRAINT FK_PEDIDO_ENVIO_ENVIO FOREIGN KEY (IdEnvio)
+        REFERENCES ENVIO(IdEnvio),
+    CONSTRAINT FK_PEDIDO_ENVIO_PEDIDO FOREIGN KEY (IdPedido)
+        REFERENCES PEDIDO(IdPedido)
+);
+
+CREATE TABLE CAJA_ENVIO (
+    IdCaja INT NOT NULL,
+    IdEnvio INT NOT NULL,
+    EstadoRecepcion VARCHAR(30) NOT NULL,
+    FechaRecepcion DATE NULL,
+    CONSTRAINT PK_CAJA_ENVIO PRIMARY KEY (IdCaja, IdEnvio),
+    CONSTRAINT FK_CAJA_ENVIO_CAJA FOREIGN KEY (IdCaja)
+        REFERENCES CAJA(IdCaja),
+    CONSTRAINT FK_CAJA_ENVIO_ENVIO FOREIGN KEY (IdEnvio)
+        REFERENCES ENVIO(IdEnvio)
+);
